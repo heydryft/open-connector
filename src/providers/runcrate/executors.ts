@@ -12,6 +12,7 @@ import {
   readProviderJsonBody,
   requiredResponseRecord,
   runProviderRequest,
+  withRetryAfterSeconds,
 } from "../provider-runtime.ts";
 
 const service = "runcrate";
@@ -53,6 +54,7 @@ export const executors: ProviderExecutors = defineApiKeyProviderExecutors(servic
 export const proxy: ProviderProxyExecutor = defineProviderProxy({
   service,
   baseUrl: apiBaseUrl,
+  timeoutMs: inferenceTimeoutMs,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
 });
@@ -108,12 +110,7 @@ function requestRuncrate(input: RuncrateRequest, context: RequestContext): Promi
           optionalString(error?.error) ??
           optionalString(error?.message) ??
           `Runcrate request failed with HTTP ${response.status}`;
-        throw new ProviderRequestError(
-          response.status,
-          message,
-          payload,
-          response.status === 429 ? "rate_limited" : "provider_error",
-        );
+        throw new ProviderRequestError(response.status, message, withRetryAfterSeconds(response, payload));
       }
       const result = requiredResponseRecord(payload, "Runcrate response");
       if (input.path === "/models" && !Array.isArray(result.data)) {
